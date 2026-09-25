@@ -768,6 +768,18 @@ def icon512():
     from flask import send_from_directory
     return send_from_directory("static", "icon-512.png")
 
+
+
+@app.route("/static/icon-192-v2.png")
+def icon192v2():
+    from flask import send_from_directory
+    return send_from_directory("static", "icon-192-v2.png")
+
+@app.route("/static/icon-512-v2.png")
+def icon512v2():
+    from flask import send_from_directory
+    return send_from_directory("static", "icon-512-v2.png")
+
 if __name__ == "__main__":
     init_db()
     print("")
