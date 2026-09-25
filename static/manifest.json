@@ -1,6 +1,7 @@
 {
   "name": "iCare Wallet",
   "short_name": "iCare",
+  "description": "Secure Digital Wallet",
   "start_url": "/wallet",
   "display": "standalone",
   "orientation": "portrait",
