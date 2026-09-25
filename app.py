@@ -169,6 +169,41 @@ body{background:linear-gradient(135deg,#e5e5ea,#f2f2f7);min-height:100vh;display
 .acard .v{font-size:28px;font-weight:700;margin-bottom:4px;letter-spacing:-.8px}
 .acard .l{font-size:12px;color:#8e8e93;font-weight:500}
 .btn-sm{padding:8px 14px;font-size:13px;border-radius:10px;display:inline-block;text-decoration:none;color:#fff;font-weight:600;border:none;cursor:pointer}
+
+/* ===== MOBILE: Hide phone frame on real phones ===== */
+@media (max-width: 500px) {
+  body {
+    padding: 0 !important;
+    background: #f2f2f7 !important;
+    align-items: stretch !important;
+  }
+  .phone {
+    width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+  }
+  .notch {
+    display: none !important;
+  }
+  .status {
+    display: none !important;
+  }
+  .screen {
+    padding-bottom: 100px !important;
+  }
+  .appbar {
+    padding-top: 16px !important;
+  }
+  .auth-logo {
+    padding-top: 40px !important;
+  }
+  .nav {
+    padding-bottom: max(22px, env(safe-area-inset-bottom)) !important;
+  }
+}
 """
 
 def fh():
