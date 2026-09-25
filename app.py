@@ -204,6 +204,16 @@ body{background:linear-gradient(135deg,#e5e5ea,#f2f2f7);min-height:100vh;display
     padding-bottom: max(22px, env(safe-area-inset-bottom)) !important;
   }
 }
+
+@media (max-width: 500px){
+  body{padding:0 !important;background:#f2f2f7 !important;display:block !important;align-items:initial !important;min-height:100vh !important}
+  .phone{width:100% !important;height:100vh !important;height:100dvh !important;border-radius:0 !important;box-shadow:none !important;max-width:100% !important;min-height:100vh !important}
+  .notch{display:none !important}
+  .status{display:none !important}
+  .appbar{padding-top:20px !important}
+  .auth-logo{padding-top:50px !important}
+  .screen{padding-bottom:100px !important}
+}
 """
 
 def fh():
