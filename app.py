@@ -214,6 +214,8 @@ body{background:linear-gradient(135deg,#e5e5ea,#f2f2f7);min-height:100vh;display
   .auth-logo{padding-top:50px !important}
   .screen{padding-bottom:100px !important}
 }
+
+@media (max-width:600px){html,body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:#fff!important}.notch,.status{display:none!important}.screen{padding-bottom:90px!important}.appbar{padding-top:20px!important}.auth-logo{padding-top:50px!important}}
 """
 
 def fh():
