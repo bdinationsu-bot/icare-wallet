@@ -1,0 +1,884 @@
+from flask import Flask, render_template_string, request, redirect, url_for, session, flash
+import sqlite3, os, hashlib
+from functools import wraps
+
+app = Flask(__name__)
+app.secret_key = 'icare-wallet-secret-2025'
+DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icare.db')
+
+# ============ DB ============
+def get_db():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db(); c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        pin TEXT NOT NULL,
+        balance REAL DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER, type TEXT, amount REAL,
+        balance_after REAL, note TEXT, related_user_id INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS admins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE, password TEXT)''')
+    if c.execute("SELECT COUNT(*) FROM admins").fetchone()[0] == 0:
+        pw = hashlib.sha256('admin123'.encode()).hexdigest()
+        c.execute("INSERT INTO admins (username,password) VALUES (?,?)", ('admin', pw))
+    conn.commit(); conn.close()
+
+def hash_pin(p): return hashlib.sha256(p.encode()).hexdigest()
+
+def login_required(f):
+    @wraps(f)
+    def w(*a, **k):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*a, **k)
+    return w
+
+def admin_required(f):
+    @wraps(f)
+    def w(*a, **k):
+        if not session.get('is_admin'):
+            return redirect(url_for('admin_login'))
+        return f(*a, **k)
+    return w
+
+# ============ iCare THEME CSS (RED / BLACK / WHITE) ============
+CSS = '''*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,"SF Pro Display","SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+body{background:linear-gradient(135deg,#e5e5ea,#f2f2f7);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;color:#1c1c1e}
+.phone{width:390px;height:844px;background:#fff;border-radius:54px;box-shadow:0 50px 100px -20px rgba(0,0,0,.25),0 30px 60px -30px rgba(0,0,0,.3),0 0 0 11px #000,0 0 0 13px #3a3a3c;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:34px;background:#000;border-radius:0 0 22px 22px;z-index:100}
+.status{height:54px;display:flex;justify-content:space-between;align-items:center;padding:0 32px 0 40px;font-size:16px;font-weight:600;color:#000;background:transparent;position:relative;z-index:50;flex-shrink:0;letter-spacing:-.3px}
+.screen{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:110px;background:#f2f2f7;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.balance-wrap{padding:8px 16px 0}
+.balance-card{background:linear-gradient(135deg,#ff3b30 0%,#d70015 100%);border-radius:24px;padding:24px;color:#fff;position:relative;overflow:hidden;box-shadow:0 12px 32px -8px rgba(255,59,48,.5),0 6px 16px -6px rgba(0,0,0,.15)}
+.balance-card::before{content:'';position:absolute;top:-60%;right:-30%;width:240px;height:240px;background:radial-gradient(circle,rgba(255,255,255,.22),transparent 65%);border-radius:50%}
+.balance-card::after{content:'';position:absolute;bottom:-50%;left:-20%;width:200px;height:200px;background:radial-gradient(circle,rgba(0,0,0,.15),transparent 65%);border-radius:50%}
+.bc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;position:relative;z-index:1}
+.bc-head .brand{font-size:16px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.bc-head .logo{width:32px;height:32px;background:rgba(255,255,255,.25);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;border:.5px solid rgba(255,255,255,.4)}
+.bc-head .dots{font-size:22px;opacity:.85;letter-spacing:2px;font-weight:700}
+.bc-label{font-size:13px;opacity:.9;letter-spacing:-.2px;position:relative;z-index:1;font-weight:500}
+.bc-amount{font-size:40px;font-weight:700;margin:4px 0 6px;position:relative;z-index:1;letter-spacing:-1.5px}
+.bc-user{font-size:14px;opacity:.9;position:relative;z-index:1;display:flex;align-items:center;gap:6px;font-weight:500;letter-spacing:-.2px}
+.bc-actions{display:flex;gap:10px;margin-top:22px;position:relative;z-index:1}
+.bc-actions a{flex:1;padding:12px;background:rgba(255,255,255,.25);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:14px;text-align:center;color:#fff;text-decoration:none;font-size:14px;font-weight:600;transition:.2s;border:.5px solid rgba(255,255,255,.35);letter-spacing:-.2px}
+.bc-actions a:active{transform:scale(.96);background:rgba(255,255,255,.4)}
+.section{padding:24px 16px 0}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0 4px}
+.section-head h3{font-size:20px;font-weight:700;color:#1c1c1e;letter-spacing:-.5px}
+.section-head a{font-size:15px;color:#ff3b30;text-decoration:none;font-weight:500;letter-spacing:-.2px}
+.actions-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.action{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 4px;background:#fff;border-radius:18px;text-decoration:none;color:#1c1c1e;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px -8px rgba(0,0,0,.08)}
+.action:active{transform:scale(.94);background:#f2f2f7}
+.action .ico{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;background:linear-gradient(135deg,#ffe5e3,#ffd0cc);color:#d70015}
+.action .lbl{font-size:11px;font-weight:600;text-align:center;letter-spacing:-.1px;line-height:1.2}
+.txn-list{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px -8px rgba(0,0,0,.08)}
+.txn{display:flex;align-items:center;padding:14px 16px;border-bottom:.5px solid #e5e5ea;gap:14px;position:relative}
+.txn:last-child{border-bottom:none}
+.txn .av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.txn .info{flex:1;min-width:0}
+.txn .info .t{font-size:15px;font-weight:600;color:#1c1c1e;margin-bottom:2px;letter-spacing:-.3px}
+.txn .info .d{font-size:12px;color:#8e8e93;letter-spacing:-.1px}
+.txn .amt{font-size:15px;font-weight:700;text-align:right;flex-shrink:0;letter-spacing:-.4px}
+.in{color:#34c759}
+.out{color:#ff3b30}
+.bg-in{background:rgba(52,199,89,.12)}
+.bg-out{background:rgba(255,59,48,.12)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 0}
+.stat{background:#fff;border-radius:18px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px -8px rgba(0,0,0,.08)}
+.stat .v{font-size:22px;font-weight:700;color:#1c1c1e;margin-bottom:2px;letter-spacing:-.5px}
+.stat .l{font-size:12px;color:#8e8e93;font-weight:500;letter-spacing:-.1px}
+.nav{position:absolute;bottom:0;left:0;right:0;height:88px;background:rgba(255,255,255,.88);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);border-top:.5px solid rgba(0,0,0,.12);display:flex;justify-content:space-around;align-items:flex-start;padding:8px 8px 22px;z-index:60}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:#8e8e93;text-decoration:none;padding:6px 4px;font-size:10px;font-weight:500;transition:.2s;letter-spacing:-.1px}
+.nav a.on{color:#ff3b30}
+.nav a .ni{font-size:24px;line-height:1}
+.nav .fab{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#ff453a,#d70015);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 20px -4px rgba(255,59,48,.6),0 2px 8px rgba(0,0,0,.12);margin-top:-14px;flex:0 0 54px;border:none;transition:.15s}
+.nav .fab:active{transform:scale(.92)}
+.appbar{padding:56px 20px 12px;background:rgba(255,255,255,.88);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);display:flex;align-items:center;gap:12px;border-bottom:.5px solid rgba(0,0,0,.12);position:sticky;top:0;z-index:40}
+.appbar a{width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent;border-radius:50%;color:#ff3b30;text-decoration:none;font-size:22px;font-weight:400;transition:.15s}
+.appbar a:active{background:rgba(255,59,48,.1)}
+.appbar h2{font-size:17px;font-weight:600;color:#1c1c1e;flex:1;letter-spacing:-.4px;text-align:center;padding-right:36px}
+.form-wrap{padding:20px 16px}
+.form-wrap label{display:block;font-size:13px;font-weight:500;color:#8e8e93;margin-bottom:8px;margin-top:20px;letter-spacing:-.1px;padding-left:4px}
+.form-wrap input,.form-wrap select{width:100%;padding:14px 16px;background:#fff;border:none;border-radius:14px;font-size:17px;color:#1c1c1e;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.04),inset 0 0 0 1px rgba(0,0,0,.04);letter-spacing:-.3px}
+.form-wrap input:focus{outline:none;box-shadow:0 0 0 3px rgba(255,59,48,.18),inset 0 0 0 1.5px #ff3b30;background:#fff}
+.form-wrap input::placeholder{color:#c7c7cc}
+.btn{width:100%;padding:16px;background:linear-gradient(135deg,#ff453a,#d70015);color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:600;margin-top:24px;cursor:pointer;transition:.15s;box-shadow:0 8px 20px -4px rgba(255,59,48,.4),0 2px 6px rgba(0,0,0,.08);letter-spacing:-.3px}
+.btn:active{transform:scale(.97);opacity:.9}
+.btn-dark{background:#1c1c1e;box-shadow:0 8px 20px -4px rgba(0,0,0,.3)}
+.btn-white{background:#fff;color:#ff3b30;box-shadow:0 2px 8px rgba(0,0,0,.08),inset 0 0 0 1px rgba(0,0,0,.06)}
+.alert{padding:14px 16px;border-radius:14px;margin:16px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:10px;letter-spacing:-.2px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.al-ok{background:rgba(52,199,89,.15);color:#248a3d}
+.al-err{background:rgba(255,59,48,.15);color:#c7000e}
+.auth{flex:1;overflow-y:auto;background:#f2f2f7;display:flex;flex-direction:column}
+.auth-logo{text-align:center;padding:60px 20px 40px;position:relative;background:transparent}
+.auth-logo .lbox{width:88px;height:88px;background:linear-gradient(135deg,#ff453a,#d70015);border-radius:24px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff;box-shadow:0 20px 40px -10px rgba(255,59,48,.5),0 4px 12px rgba(0,0,0,.1);position:relative;z-index:1}
+.auth-logo h1{font-size:32px;font-weight:700;letter-spacing:-1px;color:#1c1c1e;position:relative;z-index:1}
+.auth-logo p{font-size:14px;color:#8e8e93;margin-top:8px;position:relative;z-index:1;letter-spacing:-.2px;font-weight:500}
+.auth-form{background:#f2f2f7;padding:0 20px 40px;flex:1}
+.auth-form h3{font-size:22px;color:#1c1c1e;margin-bottom:4px;font-weight:700;letter-spacing:-.6px}
+.auth-form label{display:block;font-size:13px;font-weight:500;color:#8e8e93;margin-bottom:8px;margin-top:18px;letter-spacing:-.1px;padding-left:4px}
+.auth-form input{width:100%;padding:16px;background:#fff;border:none;border-radius:14px;font-size:17px;color:#1c1c1e;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.04),inset 0 0 0 1px rgba(0,0,0,.04);display:block;letter-spacing:-.3px}
+.auth-form input:focus{outline:none;box-shadow:0 0 0 3px rgba(255,59,48,.18),inset 0 0 0 1.5px #ff3b30;background:#fff}
+.auth-form input::placeholder{color:#c7c7cc}
+.auth-form form{margin-top:8px}
+.admin-frame{width:1200px;max-width:95vw;height:auto;background:#f2f2f7;border-radius:20px;box-shadow:0 30px 80px -20px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.06);overflow:hidden;min-height:600px}
+.admin-nav{background:rgba(255,255,255,.85);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:.5px solid rgba(0,0,0,.12)}
+.admin-nav h1{color:#1c1c1e;font-size:18px;font-weight:700;letter-spacing:-.4px}
+.admin-nav a{color:#1c1c1e;text-decoration:none;padding:8px 14px;border-radius:10px;background:transparent;font-size:13px;font-weight:500;margin-left:4px;transition:.15s;letter-spacing:-.2px}
+.admin-nav a:hover{background:rgba(0,0,0,.05)}
+.admin-body{padding:24px 28px}
+.admin-table{width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px -8px rgba(0,0,0,.08)}
+.admin-table table{width:100%;border-collapse:collapse;font-size:14px}
+.admin-table th,.admin-table td{padding:14px 18px;text-align:left;border-bottom:.5px solid #e5e5ea;color:#1c1c1e}
+.admin-table th{background:#f9f9fb;color:#8e8e93;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.admin-table tr:hover{background:#f9f9fb}
+.admin-table tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:-.1px}
+.b-in{background:rgba(52,199,89,.15);color:#248a3d}
+.b-out{background:rgba(255,59,48,.15);color:#c7000e}
+.b-info{background:rgba(0,122,255,.15);color:#0062cc}
+.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.acard{background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px -8px rgba(0,0,0,.08);position:relative;overflow:hidden}
+.acard::before{content:'';position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#ffe5e3,#ffd0cc)}
+.acard .v{font-size:28px;font-weight:700;color:#1c1c1e;margin-bottom:4px;letter-spacing:-.8px}
+.acard .l{font-size:12px;color:#8e8e93;font-weight:500;letter-spacing:-.1px}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto;margin:0;border-radius:10px;display:inline-block;text-decoration:none;color:#fff;font-weight:600;transition:.15s;border:none;cursor:pointer;letter-spacing:-.2px}
+.btn-sm:hover{opacity:.85;transform:translateY(-1px)}
+'''
+
+def flash_html():
+    h = ''
+    for cat, msg in session.pop('_flashes', []):
+        cls = 'al-ok' if cat == 'success' else 'al-err'
+        ico = '✓' if cat == 'success' else '⚠'
+        h += f'<div class="alert {cls}">{ico} {msg}</div>'
+    return h
+
+def phone_page(body, nav_active='home'):
+    nav = f'''
+    <div class="nav">
+      <a href="{url_for('wallet')}" class="{'on' if nav_active=='home' else ''}">
+        <span class="ni">🏠</span><span>Home</span></a>
+      <a href="{url_for('history')}" class="{'on' if nav_active=='history' else ''}">
+        <span class="ni">📜</span><span>History</span></a>
+      <a href="{url_for('transfer')}" class="fab">↑</a>
+      <a href="{url_for('topup')}" class="{'on' if nav_active=='topup' else ''}">
+        <span class="ni">💰</span><span>Top-up</span></a>
+      <a href="{url_for('profile')}" class="{'on' if nav_active=='me' else ''}">
+        <span class="ni">👤</span><span>Me</span></a>
+    </div>'''
+    return f'''<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>iCare Wallet</title>
+<style>{CSS}</style></head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="status"><span>9:41</span><span>📶 🔋</span></div>
+  <div class="screen">
+    {flash_html()}
+    {body}
+  </div>
+  {nav}
+</div>
+</body></html>'''
+
+# ============ AUTH ============
+@app.route('/')
+def index():
+    return redirect(url_for('wallet') if 'user_id' in session else url_for('login'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        phone = request.form['phone'].strip()
+        name = request.form['name'].strip()
+        pin = request.form['pin'].strip()
+        if not phone.startswith('09') or len(phone) < 9:
+            flash('Phone နံပါတ် မှားနေပါ', 'error')
+        elif not pin.isdigit() or not (4 <= len(pin) <= 6):
+            flash('PIN က 4-6 digits ဖြစ်ရပါမယ်', 'error')
+        else:
+            conn = get_db()
+            try:
+                conn.execute("INSERT INTO users (phone,name,pin) VALUES (?,?,?)",
+                             (phone, name, hash_pin(pin)))
+                conn.commit()
+                flash('✓ Wallet ဖွင့်ပြီးပါပြီ!', 'success')
+                return redirect(url_for('login'))
+            except sqlite3.IntegrityError:
+                flash('Phone ရှိပြီးသား', 'error')
+            finally:
+                conn.close()
+
+    body = f'''
+    <div class="auth">
+      <div class="auth-logo">
+        <div class="lbox">❤</div>
+        <h1>iCare Wallet</h1>
+        <p>Secure • Trusted • Fast</p>
+      </div>
+      <div class="auth-form">
+        <h3 style="font-size:18px;color:#fff;margin-bottom:4px">Account ဖွင့်ရန်</h3>
+        <p style="font-size:13px;color:#737373">အချက်အလက်များ ဖြည့်ပါ</p>
+        <form method="post">
+          <label>📱 Phone Number</label>
+          <input name="phone" placeholder="09xxxxxxxxx" required>
+          <label>👤 အမည်</label>
+          <input name="name" placeholder="Your name" required>
+          <label>🔒 PIN (4-6 digits)</label>
+          <input name="pin" type="password" placeholder="••••" required>
+          <button class="btn">Account ဖွင့်မည်</button>
+        </form>
+        <p style="text-align:center;margin-top:20px;font-size:13px;color:#737373">
+          Account ရှိပြီးသား?
+          <a href="{url_for('login')}" style="color:#ef4444;font-weight:800;text-decoration:none">Login →</a>
+        </p>
+      </div>
+    </div>'''
+    return f'''<!doctype html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>iCare Wallet - Register</title><style>{CSS}</style></head>
+    <body><div class="phone"><div class="notch"></div>
+    <div class="status"><span>9:41</span><span>📶 🔋</span></div>
+    <div class="screen">{flash_html()}{body}</div>
+    </div></body></html>'''
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        phone = request.form['phone'].strip()
+        pin = request.form['pin'].strip()
+        conn = get_db()
+        u = conn.execute("SELECT * FROM users WHERE phone=? AND pin=?",
+                         (phone, hash_pin(pin))).fetchone()
+        conn.close()
+        if u and u['is_active']:
+            session['user_id'] = u['id']
+            session['user_name'] = u['name']
+            return redirect(url_for('wallet'))
+        flash('Phone သို့မဟုတ် PIN မှားနေပါ', 'error')
+
+    body = f'''
+    <div class="auth">
+      <div class="auth-logo">
+        <div class="lbox">❤</div>
+        <h1>iCare Wallet</h1>
+        <p>Secure • Trusted • Fast</p>
+      </div>
+      <div class="auth-form">
+        <h3 style="font-size:18px;color:#fff;margin-bottom:4px">ပြန်လည်ကြိုဆိုပါတယ်</h3>
+        <p style="font-size:13px;color:#737373">Login ဝင်ရန်</p>
+        <form method="post">
+          <label>📱 Phone Number</label>
+          <input name="phone" placeholder="09xxxxxxxxx" required>
+          <label>🔒 PIN</label>
+          <input name="pin" type="password" placeholder="••••" required>
+          <button class="btn">ဝင်ရောက်မည်</button>
+        </form>
+        <p style="text-align:center;margin-top:20px;font-size:13px;color:#737373">
+          Account မရှိဘူးလား?
+          <a href="{url_for('register')}" style="color:#ef4444;font-weight:800;text-decoration:none">Register →</a>
+        </p>
+        <p style="text-align:center;margin-top:14px">
+          <a href="{url_for('admin_login')}" style="font-size:12px;color:#525252;text-decoration:none">
+          🛡️ Admin Login</a>
+        </p>
+      </div>
+    </div>'''
+    return f'''<!doctype html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>iCare Wallet - Login</title><style>{CSS}</style></head>
+    <body><div class="phone"><div class="notch"></div>
+    <div class="status"><span>9:41</span><span>📶 🔋</span></div>
+    <div class="screen">{flash_html()}{body}</div>
+    </div></body></html>'''
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# ============ WALLET HOME ============
+@app.route('/wallet')
+@login_required
+def wallet():
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id=?", (session['user_id'],)).fetchone()
+    txns = conn.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 5",
+                        (session['user_id'],)).fetchall()
+    sent = conn.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE user_id=? AND type='SEND'",
+                        (session['user_id'],)).fetchone()[0]
+    recv = conn.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE user_id=? AND type IN ('TOPUP','RECEIVE')",
+                        (session['user_id'],)).fetchone()[0]
+    conn.close()
+
+    txn_rows = ''
+    for t in txns:
+        is_in = t['type'] in ('TOPUP', 'RECEIVE')
+        cls = 'in' if is_in else 'out'
+        bg = 'bg-in' if is_in else 'bg-out'
+        sign = '+' if is_in else '-'
+        icon = {'TOPUP': '💰', 'RECEIVE': '⬇️', 'WITHDRAW': '💸',
+                'SEND': '📤', 'ADMIN_ADJUST': '⚙️'}.get(t['type'], '•')
+        title = {'TOPUP': 'Top-up', 'RECEIVE': 'လက်ခံရရှိ', 'WITHDRAW': 'ထုတ်ယူ',
+                 'SEND': 'လွှဲပို့', 'ADMIN_ADJUST': 'Admin Adjust'}.get(t['type'], t['type'])
+        note = f" • {t['note'][:20]}" if t['note'] else ''
+        txn_rows += f'''
+        <div class="txn">
+          <div class="av {bg}">{icon}</div>
+          <div class="info">
+            <div class="t">{title}</div>
+            <div class="d">{t['created_at'][:16]}{note}</div>
+          </div>
+          <div class="amt {cls}">{sign}{t['amount']:,.0f}</div>
+        </div>'''
+
+    body = f'''
+    <div class="balance-wrap">
+      <div class="balance-card">
+        <div class="bc-head">
+          <div class="brand"><div class="logo">❤</div> iCare Wallet</div>
+          <div class="dots">•••</div>
+        </div>
+        <div class="bc-label">လက်ကျန်ငွေ</div>
+        <div class="bc-amount">{u['balance']:,.0f} <span style="font-size:18px">Ks</span></div>
+        <div class="bc-user">👤 {u['name']} • {u['phone']}</div>
+        <div class="bc-actions">
+          <a href="{url_for('topup')}">💰 Top-up</a>
+          <a href="{url_for('transfer')}">📤 လွှဲ</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="v" style="color:#10b981">+{recv:,.0f}</div>
+        <div class="l">ဝင်ငွေ</div>
+      </div>
+      <div class="stat">
+        <div class="v" style="color:#ef4444">-{sent:,.0f}</div>
+        <div class="l">ထွက်ငွေ</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>⚡ ဝန်ဆောင်မှုများ</h3></div>
+      <div class="actions-grid">
+        <a href="{url_for('topup')}" class="action">
+          <div class="ico">💰</div><div class="lbl">Top-up</div></a>
+        <a href="{url_for('transfer')}" class="action">
+          <div class="ico">📤</div><div class="lbl">လွှဲ</div></a>
+        <a href="{url_for('withdraw')}" class="action">
+          <div class="ico">💸</div><div class="lbl">ထုတ်</div></a>
+        <a href="{url_for('history')}" class="action">
+          <div class="ico">📜</div><div class="lbl">History</div></a>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0">
+      <div class="section-head">
+        <h3>📋 မကြာသေးမီ ငွေလှုပ်ရှားမှု</h3>
+        <a href="{url_for('history')}">အားလုံး →</a>
+      </div>
+      <div class="txn-list">
+        {txn_rows or '<div style="padding:40px;text-align:center;color:#525252;font-size:13px">မှတ်တမ်း မရှိသေးပါ</div>'}
+      </div>
+    </div>
+    '''
+    return phone_page(body, 'home')
+
+# ============ TOP-UP ============
+@app.route('/topup', methods=['GET', 'POST'])
+@login_required
+def topup():
+    if request.method == 'POST':
+        amt = float(request.form['amount'])
+        if amt <= 0:
+            flash('ပမာណ် မှားနေပါ', 'error')
+        else:
+            conn = get_db()
+            u = conn.execute("SELECT * FROM users WHERE id=?", (session['user_id'],)).fetchone()
+            nb = u['balance'] + amt
+            conn.execute("UPDATE users SET balance=? WHERE id=?", (nb, u['id']))
+            conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note) VALUES (?,?,?,?,?)",
+                         (u['id'], 'TOPUP', amt, nb, request.form.get('note') or 'Top-up'))
+            conn.commit(); conn.close()
+            flash(f'✓ {amt:,.0f} Ks ဖြည့်ပြီးပါပြီ', 'success')
+            return redirect(url_for('wallet'))
+
+    body = f'''
+    <div class="appbar">
+      <a href="{url_for('wallet')}">←</a>
+      <h2>💰 Top-up</h2>
+    </div>
+    <div class="form-wrap">
+      <label>ဖြည့်မယ့် ပမာណ် (Ks)</label>
+      <input name="amount" form="f" type="number" placeholder="0" required
+        style="width:100%;padding:14px 16px;background:#1a1a1a;border:2px solid #262626;
+        border-radius:14px;font-size:15px;color:#fff">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px">
+        <button type="button" onclick="document.querySelector('[name=amount]').value=5000"
+          style="padding:12px;background:#1a1a1a;border:2px solid #262626;border-radius:10px;
+          font-weight:800;color:#ef4444;cursor:pointer;transition:.2s">5K</button>
+        <button type="button" onclick="document.querySelector('[name=amount]').value=10000"
+          style="padding:12px;background:#1a1a1a;border:2px solid #262626;border-radius:10px;
+          font-weight:800;color:#ef4444;cursor:pointer;transition:.2s">10K</button>
+        <button type="button" onclick="document.querySelector('[name=amount]').value=20000"
+          style="padding:12px;background:#1a1a1a;border:2px solid #262626;border-radius:10px;
+          font-weight:800;color:#ef4444;cursor:pointer;transition:.2s">20K</button>
+        <button type="button" onclick="document.querySelector('[name=amount]').value=50000"
+          style="padding:12px;background:#1a1a1a;border:2px solid #262626;border-radius:10px;
+          font-weight:800;color:#ef4444;cursor:pointer;transition:.2s">50K</button>
+      </div>
+      <form method="post" id="f">
+        <label>Note</label>
+        <input name="note" placeholder="Top-up">
+        <button class="btn">ဖြည့်မည်</button>
+      </form>
+    </div>'''
+    return phone_page(body, 'topup')
+
+# ============ WITHDRAW ============
+@app.route('/withdraw', methods=['GET', 'POST'])
+@login_required
+def withdraw():
+    if request.method == 'POST':
+        amt = float(request.form['amount'])
+        conn = get_db()
+        u = conn.execute("SELECT * FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        if amt <= 0:
+            flash('ပမာណ် မှားနေပါ', 'error')
+        elif amt > u['balance']:
+            flash(f'Balance မလုံလောက်ပါ ({u["balance"]:,.0f} Ks)', 'error')
+        else:
+            nb = u['balance'] - amt
+            conn.execute("UPDATE users SET balance=? WHERE id=?", (nb, u['id']))
+            conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note) VALUES (?,?,?,?,?)",
+                         (u['id'], 'WITHDRAW', amt, nb, request.form.get('note') or 'Withdraw'))
+            conn.commit(); conn.close()
+            flash(f'✓ {amt:,.0f} Ks ထုတ်ပြီးပါပြီ', 'success')
+            return redirect(url_for('wallet'))
+        conn.close()
+
+    body = f'''
+    <div class="appbar"><a href="{url_for('wallet')}">←</a><h2>💸 Withdraw</h2></div>
+    <div class="form-wrap">
+      <form method="post">
+        <label>ထုတ်မယ့် ပမာណ် (Ks)</label>
+        <input name="amount" type="number" placeholder="0" required>
+        <label>Note</label>
+        <input name="note" placeholder="Withdraw">
+        <button class="btn">ထုတ်မည်</button>
+      </form>
+    </div>'''
+    return phone_page(body)
+
+# ============ TRANSFER ============
+@app.route('/transfer', methods=['GET', 'POST'])
+@login_required
+def transfer():
+    if request.method == 'POST':
+        to = request.form['to'].strip()
+        amt = float(request.form['amount'])
+        pin = request.form['pin'].strip()
+        conn = get_db()
+        me = conn.execute("SELECT * FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        target = conn.execute("SELECT * FROM users WHERE phone=?", (to,)).fetchone()
+        if not target:
+            flash('Account မတွေ့ပါ', 'error')
+        elif target['id'] == me['id']:
+            flash('ကိုယ့်ကိုယ်ကို လွှဲလို့မရပါ', 'error')
+        elif me['pin'] != hash_pin(pin):
+            flash('PIN မှားနေပါ', 'error')
+        elif amt <= 0 or amt > me['balance']:
+            flash('Balance မလုံလောက်ပါ', 'error')
+        else:
+            nb1 = me['balance'] - amt
+            nb2 = target['balance'] + amt
+            note = request.form.get('note') or 'Transfer'
+            conn.execute("UPDATE users SET balance=? WHERE id=?", (nb1, me['id']))
+            conn.execute("UPDATE users SET balance=? WHERE id=?", (nb2, target['id']))
+            conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note,related_user_id) VALUES (?,?,?,?,?,?)",
+                         (me['id'], 'SEND', amt, nb1, f'→ {target["name"]}', target['id']))
+            conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note,related_user_id) VALUES (?,?,?,?,?,?)",
+                         (target['id'], 'RECEIVE', amt, nb2, f'← {me["name"]}', me['id']))
+            conn.commit(); conn.close()
+            flash(f'✓ {target["name"]} ဆီ {amt:,.0f} Ks လွှဲပြီးပါပြီ', 'success')
+            return redirect(url_for('wallet'))
+        conn.close()
+
+    body = f'''
+    <div class="appbar"><a href="{url_for('wallet')}">←</a><h2>📤 ငွေလွှဲ</h2></div>
+    <div class="form-wrap">
+      <form method="post">
+        <label>📱 လက်ခံမယ့်သူ Phone</label>
+        <input name="to" placeholder="09xxxxxxxxx" required>
+        <label>💵 ပမာណ် (Ks)</label>
+        <input name="amount" type="number" placeholder="0" required>
+        <label>🔒 PIN</label>
+        <input name="pin" type="password" placeholder="••••" required>
+        <label>Note</label>
+        <input name="note" placeholder="Transfer">
+        <button class="btn">လွှဲမည်</button>
+      </form>
+    </div>'''
+    return phone_page(body)
+
+# ============ HISTORY ============
+@app.route('/history')
+@login_required
+def history():
+    conn = get_db()
+    txns = conn.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 50",
+                        (session['user_id'],)).fetchall()
+    conn.close()
+    rows = ''
+    for t in txns:
+        is_in = t['type'] in ('TOPUP', 'RECEIVE')
+        cls = 'in' if is_in else 'out'
+        bg = 'bg-in' if is_in else 'bg-out'
+        sign = '+' if is_in else '-'
+        icon = {'TOPUP': '💰', 'RECEIVE': '⬇️', 'WITHDRAW': '💸',
+                'SEND': '📤', 'ADMIN_ADJUST': '⚙️'}.get(t['type'], '•')
+        title = {'TOPUP': 'Top-up', 'RECEIVE': 'လက်ခံရရှိ', 'WITHDRAW': 'ထုတ်ယူ',
+                 'SEND': 'လွှဲပို့', 'ADMIN_ADJUST': 'Admin Adjust'}.get(t['type'], t['type'])
+        rows += f'''
+        <div class="txn">
+          <div class="av {bg}">{icon}</div>
+          <div class="info">
+            <div class="t">{title}</div>
+            <div class="d">{t['created_at'][:16]} {('• '+t['note']) if t['note'] else ''}</div>
+          </div>
+          <div class="amt {cls}">{sign}{t['amount']:,.0f}</div>
+        </div>'''
+
+    body = f'''
+    <div class="appbar"><a href="{url_for('wallet')}">←</a><h2>📜 မှတ်တမ်း</h2></div>
+    <div class="section">
+      <div class="txn-list">
+        {rows or '<div style="padding:40px;text-align:center;color:#525252;font-size:13px">မှတ်တမ်း မရှိသေးပါ</div>'}
+      </div>
+    </div>'''
+    return phone_page(body, 'history')
+
+# ============ PROFILE ============
+@app.route('/profile')
+@login_required
+def profile():
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id=?", (session['user_id'],)).fetchone()
+    conn.close()
+    body = f'''
+    <div class="appbar"><a href="{url_for('wallet')}">←</a><h2>👤 Profile</h2></div>
+    <div class="section">
+      <div style="background:#1a1a1a;border:1px solid #262626;border-radius:20px;
+        padding:24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.4)">
+        <div style="width:80px;height:80px;border-radius:50%;margin:0 auto 14px;
+          background:linear-gradient(135deg,#ef4444,#7f1d1d);color:#fff;font-size:36px;
+          display:flex;align-items:center;justify-content:center;font-weight:900;
+          box-shadow:0 8px 20px rgba(239,68,68,.4)">
+          {u['name'][0].upper()}
+        </div>
+        <h3 style="font-size:18px;color:#fff">{u['name']}</h3>
+        <p style="font-size:13px;color:#737373;margin-top:4px">📱 {u['phone']}</p>
+        <div style="margin-top:20px;padding:16px;background:#111;border-radius:14px;
+          border:1px solid #262626">
+          <div style="font-size:12px;color:#737373;font-weight:700;
+            text-transform:uppercase;letter-spacing:1px">လက်ကျန်ငွေ</div>
+          <div style="font-size:28px;font-weight:900;color:#ef4444;margin-top:6px">
+            {u['balance']:,.2f} Ks</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;background:#1a1a1a;border:1px solid #262626;
+        border-radius:20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.4)">
+        <a href="{url_for('history')}" style="display:flex;align-items:center;padding:18px;
+          text-decoration:none;color:#fff;border-bottom:1px solid #262626;gap:12px">
+          <span style="font-size:20px">📜</span>
+          <span style="flex:1;font-weight:600">Transaction History</span>
+          <span style="color:#525252">›</span>
+        </a>
+        <a href="{url_for('logout')}" style="display:flex;align-items:center;padding:18px;
+          text-decoration:none;color:#ef4444;gap:12px">
+          <span style="font-size:20px">🚪</span>
+          <span style="flex:1;font-weight:700">Logout</span>
+          <span style="color:#525252">›</span>
+        </a>
+      </div>
+    </div>'''
+    return phone_page(body, 'me')
+
+# ============ ADMIN ============
+def admin_page(title, body):
+    return f'''<!doctype html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{title} - iCare Admin</title><style>{CSS}</style></head>
+    <body><div class="admin-frame">
+      <div class="admin-nav">
+        <h1>🛡️ iCare Admin</h1>
+        <div>
+          <a href="{url_for('admin_dashboard')}">Dashboard</a>
+          <a href="{url_for('admin_users')}">Users</a>
+          <a href="{url_for('admin_transactions')}">Transactions</a>
+          <a href="{url_for('admin_logout')}">Logout</a>
+        </div>
+      </div>
+      <div class="admin-body">
+        {flash_html()}
+        {body}
+      </div>
+    </div></body></html>'''
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        u = request.form['username']
+        p = hashlib.sha256(request.form['password'].encode()).hexdigest()
+        conn = get_db()
+        a = conn.execute("SELECT * FROM admins WHERE username=? AND password=?", (u, p)).fetchone()
+        conn.close()
+        if a:
+            session['is_admin'] = True
+            return redirect(url_for('admin_dashboard'))
+        flash('Credential မှားနေပါ', 'error')
+    body = f'''
+    <div style="max-width:420px;margin:60px auto;background:#1a1a1a;padding:32px;
+      border-radius:20px;box-shadow:0 10px 40px rgba(220,38,38,.3);border:1px solid #262626">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="width:60px;height:60px;background:#fff;border-radius:18px;
+          margin:0 auto 12px;display:flex;align-items:center;justify-content:center;
+          font-size:30px;color:#dc2626;font-weight:900">❤</div>
+        <h2 style="color:#fff;font-size:20px;font-weight:800">iCare Admin</h2>
+        <p style="color:#737373;font-size:13px;margin-top:4px">Control Panel</p>
+      </div>
+      <form method="post">
+        <label style="font-size:12px;color:#a3a3a3;font-weight:700;
+          text-transform:uppercase;letter-spacing:.5px">Username</label>
+        <input name="username" value="admin" style="width:100%;padding:14px;
+          background:#111;border:2px solid #262626;border-radius:12px;margin:6px 0 14px;
+          font-size:14px;color:#fff" required>
+        <label style="font-size:12px;color:#a3a3a3;font-weight:700;
+          text-transform:uppercase;letter-spacing:.5px">Password</label>
+        <input name="password" type="password" style="width:100%;padding:14px;
+          background:#111;border:2px solid #262626;border-radius:12px;margin:6px 0 20px;
+          font-size:14px;color:#fff" required>
+        <button class="btn">ဝင်ရောက်</button>
+      </form>
+      <p style="text-align:center;margin-top:16px;font-size:12px;color:#525252">
+        Default: admin / admin123</p>
+    </div>'''
+    return admin_page('Login', body)
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('is_admin', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    conn = get_db()
+    stats = {
+        'users': conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+        'active': conn.execute("SELECT COUNT(*) FROM users WHERE is_active=1").fetchone()[0],
+        'balance': conn.execute("SELECT COALESCE(SUM(balance),0) FROM users").fetchone()[0],
+        'txns': conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0],
+    }
+    recent = conn.execute('''SELECT t.*, u.name, u.phone FROM transactions t
+                             LEFT JOIN users u ON u.id=t.user_id
+                             ORDER BY t.id DESC LIMIT 10''').fetchall()
+    conn.close()
+    rows = ''
+    for t in recent:
+        cls = 'b-in' if t['type'] in ('TOPUP','RECEIVE') else 'b-out'
+        rows += f'''<tr>
+          <td>{t['name'] or '-'}<br><span style="color:#737373;font-size:12px">{t['phone'] or ''}</span></td>
+          <td><span class="badge {cls}">{t['type']}</span></td>
+          <td><b style="color:#ef4444">{t['amount']:,.0f} Ks</b></td>
+          <td>{t['created_at'][:16]}</td>
+        </tr>'''
+    body = f'''
+    <div class="admin-stats">
+      <div class="acard"><div class="v">{stats['users']}</div><div class="l">Total Users</div></div>
+      <div class="acard"><div class="v">{stats['active']}</div><div class="l">Active</div></div>
+      <div class="acard"><div class="v">{stats['balance']:,.0f}</div><div class="l">Total Balance</div></div>
+      <div class="acard"><div class="v">{stats['txns']}</div><div class="l">Transactions</div></div>
+    </div>
+    <div class="admin-table">
+      <table>
+        <thead><tr><th>User</th><th>Type</th><th>Amount</th><th>Date</th></tr></thead>
+        <tbody>{rows or '<tr><td colspan=4 style="text-align:center;padding:40px;color:#525252">No data</td></tr>'}</tbody>
+      </table>
+    </div>'''
+    return admin_page('Dashboard', body)
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    conn = get_db()
+    users = conn.execute("SELECT * FROM users ORDER BY id DESC").fetchall()
+    conn.close()
+    rows = ''
+    for u in users:
+        st = '<span class="badge b-in">Active</span>' if u['is_active'] else '<span class="badge b-out">Disabled</span>'
+        tgl = 'Disable' if u['is_active'] else 'Enable'
+        tc = 'b-out' if u['is_active'] else 'b-in'
+        rows += f'''<tr>
+          <td>{u['id']}</td>
+          <td><b>{u['name']}</b><br><span style="color:#737373;font-size:12px">{u['phone']}</span></td>
+          <td><b style="color:#ef4444">{u['balance']:,.0f} Ks</b></td>
+          <td>{st}</td>
+          <td>
+            <a href="{url_for('admin_user_detail', uid=u['id'])}" class="btn-sm"
+              style="background:#dc2626">View</a>
+            <a href="{url_for('admin_toggle_user', uid=u['id'])}" class="btn-sm badge {tc}">{tgl}</a>
+          </td>
+        </tr>'''
+    body = f'''
+    <div class="admin-table">
+      <table>
+        <thead><tr><th>ID</th><th>User</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>{rows or '<tr><td colspan=5 style="text-align:center;padding:40px;color:#525252">No users</td></tr>'}</tbody>
+      </table>
+    </div>'''
+    return admin_page('Users', body)
+
+@app.route('/admin/user/<int:uid>')
+@admin_required
+def admin_user_detail(uid):
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not u:
+        conn.close()
+        return redirect(url_for('admin_users'))
+    txns = conn.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 30", (uid,)).fetchall()
+    conn.close()
+    rows = ''
+    for t in txns:
+        cls = 'b-in' if t['type'] in ('TOPUP','RECEIVE') else 'b-out'
+        rows += f'''<tr>
+          <td><span class="badge {cls}">{t['type']}</span></td>
+          <td>{t['amount']:,.0f} Ks</td>
+          <td>{t['balance_after']:,.0f} Ks</td>
+          <td>{t['note'] or '-'}</td>
+          <td>{t['created_at'][:16]}</td>
+        </tr>'''
+    body = f'''
+    <div class="admin-stats" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="acard"><div class="l">User</div><div class="v" style="font-size:18px">{u['name']}</div></div>
+      <div class="acard"><div class="l">Phone</div><div class="v" style="font-size:18px">{u['phone']}</div></div>
+      <div class="acard"><div class="l">Balance</div><div class="v">{u['balance']:,.0f} Ks</div></div>
+    </div>
+    <div class="admin-table" style="padding:24px;margin-bottom:20px">
+      <h3 style="margin-bottom:16px;color:#fff">⚙️ Balance Adjust</h3>
+      <form method="post" action="{url_for('admin_adjust_balance', uid=uid)}"
+        style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <label style="font-size:12px;color:#a3a3a3;font-weight:700;
+            text-transform:uppercase;letter-spacing:.5px">Amount (+/-)</label>
+          <input name="amount" type="number" step="0.01" placeholder="5000 or -5000"
+            style="width:100%;padding:12px;background:#111;border:2px solid #262626;
+            border-radius:10px;margin-top:6px;color:#fff" required>
+        </div>
+        <div style="flex:2;min-width:220px">
+          <label style="font-size:12px;color:#a3a3a3;font-weight:700;
+            text-transform:uppercase;letter-spacing:.5px">Reason</label>
+          <input name="reason" placeholder="Admin adjustment"
+            style="width:100%;padding:12px;background:#111;border:2px solid #262626;
+            border-radius:10px;margin-top:6px;color:#fff" required>
+        </div>
+        <button type="submit" class="btn-sm" style="padding:13px 24px;
+          background:linear-gradient(135deg,#ef4444,#dc2626)">Adjust</button>
+      </form>
+    </div>
+    <div class="admin-table">
+      <table>
+        <thead><tr><th>Type</th><th>Amount</th><th>Balance</th><th>Note</th><th>Date</th></tr></thead>
+        <tbody>{rows or '<tr><td colspan=5 style="text-align:center;padding:40px;color:#525252">No data</td></tr>'}</tbody>
+      </table>
+    </div>
+    <p style="margin-top:16px"><a href="{url_for('admin_users')}"
+      style="color:#ef4444;text-decoration:none;font-weight:700">← Back to Users</a></p>'''
+    return admin_page('User Detail', body)
+
+@app.route('/admin/user/<int:uid>/adjust', methods=['POST'])
+@admin_required
+def admin_adjust_balance(uid):
+    amt = float(request.form['amount'])
+    reason = request.form['reason']
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    nb = u['balance'] + amt
+    if nb < 0:
+        flash('Balance အနုတ် ဖြစ်သွားပါမယ်', 'error')
+    else:
+        conn.execute("UPDATE users SET balance=? WHERE id=?", (nb, uid))
+        conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note) VALUES (?,?,?,?,?)",
+                     (uid, 'ADMIN_ADJUST', amt, nb, reason))
+        conn.commit()
+        flash(f'✓ {amt:+,.0f} Ks adjust လုပ်ပြီးပါပြီ', 'success')
+    conn.close()
+    return redirect(url_for('admin_user_detail', uid=uid))
+
+@app.route('/admin/user/<int:uid>/toggle')
+@admin_required
+def admin_toggle_user(uid):
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    conn.execute("UPDATE users SET is_active=? WHERE id=?", (0 if u['is_active'] else 1, uid))
+    conn.commit(); conn.close()
+    flash('✓ Status ပြောင်းပြီးပါပြီ', 'success')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/transactions')
+@admin_required
+def admin_transactions():
+    conn = get_db()
+    txns = conn.execute('''SELECT t.*, u.name, u.phone FROM transactions t
+                           LEFT JOIN users u ON u.id=t.user_id
+                           ORDER BY t.id DESC LIMIT 100''').fetchall()
+    conn.close()
+    rows = ''
+    for t in txns:
+        cls = 'b-in' if t['type'] in ('TOPUP','RECEIVE') else 'b-out'
+        rows += f'''<tr>
+          <td>{t['id']}</td>
+          <td>{t['name'] or '-'}<br><span style="color:#737373;font-size:12px">{t['phone'] or ''}</span></td>
+          <td><span class="badge {cls}">{t['type']}</span></td>
+          <td><b style="color:#ef4444">{t['amount']:,.0f} Ks</b></td>
+          <td>{t['note'] or '-'}</td>
+          <td>{t['created_at'][:16]}</td>
+        </tr>'''
+    body = f'''
+    <div class="admin-table">
+      <table>
+        <thead><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Note</th><th>Date</th></tr></thead>
+        <tbody>{rows or '<tr><td colspan=6 style="text-align:center;padding:40px;color:#525252">No data</td></tr>'}</tbody>
+      </table>
+    </div>'''
+    return admin_page('Transactions', body)
+
+if __name__ == '__main__':
+    init_db()
+    print("\n" + "="*55)
+    print("  ❤  iCare WALLET - Red • Black • White Theme")
+    print("="*55)
+    print("  💳 User  : http://127.0.0.1:5000")
+    print("  🛡️ Admin : http://127.0.0.1:5000/admin/login")
+    print("  🔑 Admin : admin / admin123")
+    print("="*55 + "\n")
+    app.run(debug=True, port=5000)
