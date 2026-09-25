@@ -198,7 +198,7 @@ def pp(body, nav="home"):
         b = badge if key == "cart" else ""
         nav_html += '<a href="' + url_for(endpoint) + '" class="' + on.strip() + '"><span class="ni">' + icon + '</span>' + b + '<span>' + label + '</span></a>'
     nav_html += "</div>"
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Signal</span></div><div class="screen">' + fh() + body + '</div>' + nav_html + '</div></body></html>'
+    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iCare Wallet</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Signal</span></div><div class="screen">' + fh() + body + '</div>' + nav_html + '</div></body></html>'
 
 @app.route("/")
 def index():
@@ -300,7 +300,7 @@ def register():
         body += '<button class="btn">Send SMS OTP</button></form>'
         body += '<p style="text-align:center;margin-top:20px"><a href="' + url_for("login") + '" style="color:#ff3b30;text-decoration:none;font-weight:600">Login</a></p></div>'
 
-    return '<!doctype html><html><head><meta charset="utf-8"><title>Register</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div></body></html>'
+    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Register</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div></body></html>'
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -316,7 +316,7 @@ def login():
             return redirect(url_for("wallet"))
         flash("Phone/PIN မှားနေပါ", "error")
     body = '<div class="auth-logo"><div class="lbox">❤</div><h1>iCare Wallet</h1><p>SECURE - TRUSTED - FAST</p></div><div class="auth-form"><h3>Login</h3><form method="post"><label>Phone</label><input name="phone" placeholder="09xxxxxxxxx" required><label>PIN</label><input name="pin" type="password" required><button class="btn">ဝင်ရောက်</button></form><p style="text-align:center;margin-top:20px"><a href="' + url_for("register") + '" style="color:#ff3b30;text-decoration:none;font-weight:700">Register</a></p><p style="text-align:center;margin-top:14px"><a href="' + url_for("admin_login") + '" style="font-size:12px;color:#c7c7cc;text-decoration:none">Admin Login</a></p></div>'
-    return '<!doctype html><html><head><meta charset="utf-8"><title>Login</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div></body></html>'
+    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Login</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div></body></html>'
 
 @app.route("/logout")
 def logout():
@@ -595,7 +595,7 @@ def profile():
 
 def admin_page(title, body):
     nav = '<div class="admin-nav"><h1>iCare Admin</h1><div><a href="' + url_for("admin_dashboard") + '">Dashboard</a><a href="' + url_for("admin_users") + '">Users</a><a href="' + url_for("admin_products") + '">Products</a><a href="' + url_for("admin_orders") + '">Orders</a><a href="' + url_for("admin_logout") + '">Logout</a></div></div>'
-    return '<!doctype html><html><head><meta charset="utf-8"><title>' + title + '</title><style>' + CSS + '</style></head><body><div class="admin-frame">' + nav + '<div class="admin-body">' + fh() + body + '</div></div></body></html>'
+    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>' + title + '</title><style>' + CSS + '</style></head><body><div class="admin-frame">' + nav + '<div class="admin-body">' + fh() + body + '</div></div></body></html>'
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
