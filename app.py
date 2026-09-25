@@ -751,6 +751,23 @@ def admin_order_detail(oid):
     body = '<div class="admin-table" style="padding:24px;margin-bottom:20px"><h3 style="margin-bottom:16px">Order #' + str(o["id"]) + ' - ' + (o["name"] or "-") + '</h3><form method="post"><select name="status" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px;margin-right:10px">' + options + '</select><button type="submit" class="btn-sm" style="padding:12px 20px;background:linear-gradient(135deg,#ff453a,#d70015)">Update</button></form></div><div class="admin-table"><table><thead><tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr></thead><tbody>' + items_html + '</tbody></table></div>'
     return admin_page("Order", body)
 
+
+
+@app.route("/static/manifest.json")
+def manifest():
+    from flask import send_from_directory
+    return send_from_directory("static", "manifest.json", mimetype="application/json")
+
+@app.route("/static/icon-192.png")
+def icon192():
+    from flask import send_from_directory
+    return send_from_directory("static", "icon-192.png")
+
+@app.route("/static/icon-512.png")
+def icon512():
+    from flask import send_from_directory
+    return send_from_directory("static", "icon-512.png")
+
 if __name__ == "__main__":
     init_db()
     print("")
