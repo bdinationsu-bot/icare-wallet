@@ -198,7 +198,7 @@ def pp(body, nav="home"):
         b = badge if key == "cart" else ""
         nav_html += '<a href="' + url_for(endpoint) + '" class="' + on.strip() + '"><span class="ni">' + icon + '</span>' + b + '<span>' + label + '</span></a>'
     nav_html += "</div>"
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iCare Wallet</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Signal</span></div><div class="screen">' + fh() + body + '</div>' + nav_html + '</div></body></html>'
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Signal</span></div><div class="screen">' + fh() + body + '</div>' + nav_html + '</div></body></html>'
 
 @app.route("/")
 def index():
