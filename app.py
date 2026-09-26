@@ -52,8 +52,8 @@ CSS = """
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,"SF Pro Display","SF Pro Text",sans-serif;-webkit-font-smoothing:antialiased}
 body{background:linear-gradient(135deg,#e5e5ea,#f2f2f7);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;color:#1c1c1e}
 .phone{width:390px;height:844px;background:#fff;border-radius:54px;box-shadow:0 50px 100px -20px rgba(0,0,0,.25),0 0 0 11px #000,0 0 0 13px #3a3a3c;position:relative;overflow:hidden;display:flex;flex-direction:column}
-.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:34px;background:#000;border-radius:0 0 22px 22px;z-index:100}
-.status{height:54px;display:flex;justify-content:space-between;align-items:center;padding:0 32px 0 40px;font-size:16px;font-weight:600;position:relative;z-index:50;flex-shrink:0}
+.notch{display:none!important}
+.status{display:none!important}
 .screen{flex:1;overflow-y:auto;padding-bottom:110px;background:#f2f2f7;scrollbar-width:none}
 .screen::-webkit-scrollbar{display:none}
 .balance-wrap{padding:8px 16px 0}
@@ -269,10 +269,8 @@ def pp(body, nav="home"):
     head = '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body>'
     tail = '</body></html>'
 
-    if is_mobile():
-        ms = '<style>body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important;align-items:initial!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:0!important;background:#fff!important}.notch,.status{display:none!important}.screen{padding-bottom:90px!important}.appbar{padding-top:20px!important}.auth-logo{padding-top:50px!important}.nav{padding-bottom:max(22px,env(safe-area-inset-bottom))!important}</style>'
-        return head + ms + fh() + '<div class="phone"><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
-    return head + fh() + '<div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
+    ms = '<style>body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important;align-items:initial!important;justify-content:initial!important;min-height:100vh!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;min-height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:0!important;background:#fff!important}.notch,.status{display:none!important;visibility:hidden!important}.screen{padding-bottom:90px!important;min-height:100vh!important}.appbar{padding-top:20px!important}.auth-logo{padding-top:50px!important}.nav{padding-bottom:max(22px,env(safe-area-inset-bottom))!important}</style>'
+    return head + ms + fh() + '<div class="phone"><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
 
 
 
@@ -376,7 +374,7 @@ def register():
         body += '<button class="btn">Send SMS OTP</button></form>'
         body += '<p style="text-align:center;margin-top:20px"><a href="' + url_for("login") + '" style="color:#ff3b30;text-decoration:none;font-weight:600">Login</a></p></div>'
 
-    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Register</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
+    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Register</title><style>' + CSS + '</style></head><body><style>body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important;min-height:100vh!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;min-height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:#fff!important}.notch,.status{display:none!important}.screen{padding-bottom:90px!important}.auth-logo{padding-top:50px!important}</style><div class="phone"><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -392,7 +390,7 @@ def login():
             return redirect(url_for("wallet"))
         flash("Phone/PIN မှားနေပါ", "error")
     body = '<div class="auth-logo"><div class="lbox" style="background:none;box-shadow:none;padding:0"><img src="/static/icon-512-v2.png" style="width:88px;height:88px;border-radius:24px;box-shadow:0 20px 40px -10px rgba(255,59,48,.5)"></div><h1>iCare Wallet</h1><p>SECURE - TRUSTED - FAST</p></div><div class="auth-form"><h3>Login</h3><form method="post"><label>Phone</label><input name="phone" placeholder="09xxxxxxxxx" required><label>PIN</label><input name="pin" type="password" required><button class="btn">ဝင်ရောက်</button></form><p style="text-align:center;margin-top:20px"><a href="' + url_for("register") + '" style="color:#ff3b30;text-decoration:none;font-weight:700">Register</a></p><p style="text-align:center;margin-top:14px"><a href="' + url_for("admin_login") + '" style="font-size:12px;color:#c7c7cc;text-decoration:none">Admin Login</a></p></div>'
-    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Login</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
+    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Login</title><style>' + CSS + '</style></head><body><style>body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important;min-height:100vh!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;min-height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;background:#fff!important}.notch,.status{display:none!important}.screen{padding-bottom:90px!important}.auth-logo{padding-top:50px!important}</style><div class="phone"><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
 
 @app.route("/logout")
 def logout():
