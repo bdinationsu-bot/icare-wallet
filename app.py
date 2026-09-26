@@ -266,7 +266,7 @@ def pp(body, nav="home"):
     nav_parts.append("</div>")
     nav_html = "".join(nav_parts)
 
-    head = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body>'
+    head = '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body>'
     tail = '</body></html>'
 
     if is_mobile():
@@ -376,7 +376,7 @@ def register():
         body += '<button class="btn">Send SMS OTP</button></form>'
         body += '<p style="text-align:center;margin-top:20px"><a href="' + url_for("login") + '" style="color:#ff3b30;text-decoration:none;font-weight:600">Login</a></p></div>'
 
-    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Register</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
+    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Register</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -392,7 +392,7 @@ def login():
             return redirect(url_for("wallet"))
         flash("Phone/PIN မှားနေပါ", "error")
     body = '<div class="auth-logo"><div class="lbox" style="background:none;box-shadow:none;padding:0"><img src="/static/icon-512-v2.png" style="width:88px;height:88px;border-radius:24px;box-shadow:0 20px 40px -10px rgba(255,59,48,.5)"></div><h1>iCare Wallet</h1><p>SECURE - TRUSTED - FAST</p></div><div class="auth-form"><h3>Login</h3><form method="post"><label>Phone</label><input name="phone" placeholder="09xxxxxxxxx" required><label>PIN</label><input name="pin" type="password" required><button class="btn">ဝင်ရောက်</button></form><p style="text-align:center;margin-top:20px"><a href="' + url_for("register") + '" style="color:#ff3b30;text-decoration:none;font-weight:700">Register</a></p><p style="text-align:center;margin-top:14px"><a href="' + url_for("admin_login") + '" style="font-size:12px;color:#c7c7cc;text-decoration:none">Admin Login</a></p></div>'
-    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Login</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
+    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>Login</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
 
 @app.route("/logout")
 def logout():
@@ -671,7 +671,7 @@ def profile():
 
 def admin_page(title, body):
     nav = '<div class="admin-nav"><h1>iCare Admin</h1><div><a href="' + url_for("admin_dashboard") + '">Dashboard</a><a href="' + url_for("admin_users") + '">Users</a><a href="' + url_for("admin_products") + '">Products</a><a href="' + url_for("admin_orders") + '">Orders</a><a href="' + url_for("admin_logout") + '">Logout</a></div></div>'
-    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>' + title + '</title><style>' + CSS + '</style></head><body><div class="admin-frame">' + nav + '<div class="admin-body">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
+    return '<!doctype html><html><head><script src="/static/frame_fix.js"></script><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>' + title + '</title><style>' + CSS + '</style></head><body><div class="admin-frame">' + nav + '<div class="admin-body">' + fh() + body + '</div></div><script src="/static/mobile.js"></script></body></html>'
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -862,6 +862,13 @@ def icon512v2():
 def mobile_js():
     from flask import send_from_directory
     return send_from_directory("static", "mobile.js", mimetype="application/javascript")
+
+
+
+@app.route("/static/frame_fix.js")
+def frame_fix_js():
+    from flask import send_from_directory
+    return send_from_directory("static", "frame_fix.js", mimetype="application/javascript")
 
 if __name__ == "__main__":
     init_db()
