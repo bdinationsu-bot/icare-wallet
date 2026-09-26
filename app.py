@@ -28,6 +28,12 @@ def init_db():
 
 def hp(p): return hashlib.sha256(p.encode()).hexdigest()
 
+def is_mobile():
+    ua = request.headers.get("User-Agent", "").lower()
+    return any(x in ua for x in ["iphone", "ipad", "ipod", "android", "mobile", "webos", "blackberry"])
+
+
+
 def login_required(f):
     @wraps(f)
     def w(*a, **k):
@@ -233,19 +239,29 @@ def pp(body, nav="home"):
     cnt = cart_count()
     badge = '<span class="badge-dot">' + str(cnt) + '</span>' if cnt > 0 else ""
     links = [
-        ("wallet", "🏠", "Home", "home"),
-        ("shop", "🛍️", "Shop", "shop"),
-        ("cart", "🛒", "Cart", "cart"),
-        ("orders", "📦", "Orders", "orders"),
-        ("profile", "👤", "Me", "me"),
+        ("wallet", "Home", "home"),
+        ("shop", "Shop", "shop"),
+        ("cart", "Cart", "cart"),
+        ("orders", "Orders", "orders"),
+        ("profile", "Me", "me"),
     ]
-    nav_html = '<div class="nav">'
-    for endpoint, icon, label, key in links:
+    nav_parts = ['<div class="nav">']
+    for endpoint, label, key in links:
         on = " on" if nav == key else ""
         b = badge if key == "cart" else ""
-        nav_html += '<a href="' + url_for(endpoint) + '" class="' + on.strip() + '"><span class="ni">' + icon + '</span>' + b + '<span>' + label + '</span></a>'
-    nav_html += "</div>"
-    return '<!doctype html><html><head><meta charset="utf-8"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iCare Wallet</title><style>' + CSS + '</style></head><body><div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Signal</span></div><div class="screen">' + fh() + body + '</div>' + nav_html + '</div><script src="/static/mobile.js"></script></body></html>'
+        nav_parts.append('<a href="' + url_for(endpoint) + '" class="' + on.strip() + '">' + b + '<span>' + label + '</span></a>')
+    nav_parts.append("</div>")
+    nav_html = "".join(nav_parts)
+
+    head = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><link rel="manifest" href="/static/manifest.json"><meta name="theme-color" content="#ff3b30"><title>iCare Wallet</title><style>' + CSS + '</style></head><body>'
+    tail = '</body></html>'
+
+    if is_mobile():
+        ms = '<style>body{padding:0!important;margin:0!important;background:#f2f2f7!important;display:block!important;align-items:initial!important}.phone{width:100vw!important;max-width:100vw!important;height:100vh!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:0!important;background:#fff!important}.notch,.status{display:none!important}.screen{padding-bottom:90px!important}.appbar{padding-top:20px!important}.auth-logo{padding-top:50px!important}.nav{padding-bottom:max(22px,env(safe-area-inset-bottom))!important}</style>'
+        return head + ms + fh() + '<div class="phone"><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
+    return head + fh() + '<div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>Sig</span></div><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
+
+
 
 @app.route("/")
 def index():
