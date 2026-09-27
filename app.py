@@ -58,6 +58,55 @@ def init_db():
         import traceback
         traceback.print_exc()
 
+
+
+def seed_apple_products():
+    conn = get_db(); c = conn.cursor()
+    has = c.execute("SELECT COUNT(*) FROM products WHERE category='iPhone'").fetchone()[0]
+    if has > 0:
+        conn.close(); return
+    apple = [
+        ("iPhone 18 Pro Max","6.9-inch ProMotion, A20 Pro, 48MP",3200000,15,"iPhone","📱"),
+        ("iPhone 18 Pro","6.3-inch Super Retina XDR, A20 Pro",2900000,20,"iPhone","📱"),
+        ("iPhone 18","6.1-inch, A18 chip, dual camera",2100000,25,"iPhone","📱"),
+        ("iPhone 17 Pro Max","6.9-inch, A19 Pro",2800000,10,"iPhone","📱"),
+        ("iPhone 17 Pro","6.3-inch, A19 Pro, titanium",2500000,12,"iPhone","📱"),
+        ("iPhone 17","6.1-inch, A18 Bionic",1800000,30,"iPhone","📱"),
+        ("iPhone 16 Pro Max","6.9-inch, A18 Pro",2400000,8,"iPhone","📱"),
+        ("iPhone 16","6.1-inch, A18, USB-C",1500000,40,"iPhone","📱"),
+        ("iPhone SE","4.7-inch, A15 Bionic",850000,50,"iPhone","📱"),
+        ("iPad Pro 13 M4","13-inch Ultra Retina XDR, M4",2800000,10,"iPad","📱"),
+        ("iPad Pro 11 M4","11-inch Ultra Retina XDR, M4",2200000,15,"iPad","📱"),
+        ("iPad Air 13 M2","13-inch Liquid Retina, M2",1500000,20,"iPad","📱"),
+        ("iPad Air 11 M2","11-inch Liquid Retina, M2",1200000,25,"iPad","📱"),
+        ("iPad 10.9","10.9-inch Liquid Retina, A14",750000,35,"iPad","📱"),
+        ("iPad mini 7","8.3-inch, A17 Pro",950000,18,"iPad","📱"),
+        ("MacBook Pro 16 M4 Max","16-inch XDR, M4 Max, 48GB",6500000,5,"Mac","💻"),
+        ("MacBook Pro 14 M4 Pro","14-inch XDR, M4 Pro, 24GB",4500000,8,"Mac","💻"),
+        ("MacBook Air 15 M3","15-inch, M3, 8GB",2600000,12,"Mac","💻"),
+        ("MacBook Air 13 M3","13.6-inch, M3",2200000,15,"Mac","💻"),
+        ("iMac 24 M4","24-inch 4.5K Retina, M4",3200000,6,"Mac","🖥"),
+        ("Mac mini M4","M4 chip, compact",1500000,10,"Mac","🖥"),
+        ("Mac Studio M2 Ultra","M2 Ultra, 64GB RAM",5800000,3,"Mac","🖥"),
+        ("Apple Watch Ultra 3","49mm Titanium, 72hr",1800000,10,"Watch","⌚"),
+        ("Apple Watch Series 11","45mm, S11 chip",1200000,20,"Watch","⌚"),
+        ("Apple Watch SE 3","40mm, S9 chip",650000,30,"Watch","⌚"),
+        ("AirPods Pro 3","ANC, USB-C, MagSafe",850000,25,"AirPods","🎧"),
+        ("AirPods 4","Spatial Audio, H2, USB-C",550000,35,"AirPods","🎧"),
+        ("AirPods Max 2","Over-ear, USB-C",1500000,8,"AirPods","🎧"),
+        ("Apple Pencil Pro","Squeeze, haptic",350000,30,"Accessories","✏️"),
+        ("Magic Keyboard","Touch ID, numeric",450000,20,"Accessories","⌨️"),
+        ("Magic Mouse","Multi-touch, USB-C",250000,25,"Accessories","🖱"),
+        ("MagSafe Charger","15W wireless",150000,40,"Accessories","🔌"),
+        ("Apple TV 4K","A15 Bionic, 4K HDR",650000,15,"Accessories","📺"),
+        ("HomePod mini","Siri, spatial audio",350000,20,"Accessories","🔊"),
+        ("AirTag 4-pack","Precision Finding",200000,50,"Accessories","📍"),
+    ]
+    for p in apple:
+        c.execute("INSERT INTO products (name,description,price,stock,category,image) VALUES (?,?,?,?,?,?)", p)
+    conn.commit(); conn.close()
+    print("Added " + str(len(apple)) + " Apple products")
+
 def hp(p): return hashlib.sha256(p.encode()).hexdigest()
 
 def is_mobile():
@@ -906,6 +955,11 @@ def mobile_js():
 def frame_fix_js():
     from flask import send_from_directory
     return send_from_directory("static", "frame_fix.js", mimetype="application/javascript")
+
+# Module-level init for gunicorn/Render
+init_db()
+seed_apple_products()
+
 
 if __name__ == "__main__":
     init_db()
