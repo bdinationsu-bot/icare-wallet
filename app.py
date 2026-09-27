@@ -12,6 +12,21 @@ def get_db():
     return conn
 
 def init_db():
+    import os as _os
+    # Delete broken DB if it exists but has no tables
+    if _os.path.exists(DB):
+        try:
+            _c = sqlite3.connect(DB)
+            tables = _c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            _c.close()
+            if not tables:
+                _os.remove(DB)
+                print("Removed empty DB, recreating...")
+        except Exception as _e:
+            print("DB check error:", _e)
+            try:
+                _os.remove(DB)
+            except: pass
     conn = get_db(); c = conn.cursor()
     c.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, pin TEXT NOT NULL, balance REAL DEFAULT 0, is_active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     c.execute("CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT, amount REAL, balance_after REAL, note TEXT, related_user_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
