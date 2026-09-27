@@ -868,6 +868,8 @@ def frame_fix_js():
     from flask import send_from_directory
     return send_from_directory("static", "frame_fix.js", mimetype="application/javascript")
 
+init_db()
+
 if __name__ == "__main__":
     init_db()
     print("")
