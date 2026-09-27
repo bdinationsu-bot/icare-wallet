@@ -826,12 +826,25 @@ def admin_toggle_user(uid):
 def admin_products():
     conn = get_db()
     products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
+    cat_stats = conn.execute("SELECT category, COUNT(*) FROM products WHERE is_active=1 GROUP BY category").fetchall()
     conn.close()
+    
+    stats_html = '<div class="admin-stats" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px">'
+    for cat, count in cat_stats:
+        stats_html += '<div class="acard" style="padding:14px"><div class="v" style="font-size:20px">' + str(count) + '</div><div class="l">' + (cat or 'Other') + '</div></div>'
+    stats_html += '</div>'
+    
     rows = ""
     for p in products:
-        rows += '<tr><td style="font-size:24px">' + (p["image"] or "📦") + '</td><td><b>' + p["name"] + '</b><br><span style="color:#8e8e93;font-size:12px">' + (p["category"] or "") + '</span></td><td><b style="color:#ff3b30">' + format(p["price"], ",.0f") + ' Ks</b></td><td>' + str(p["stock"]) + '</td><td><a href="' + url_for("admin_product_edit", pid=p["id"]) + '" class="btn-sm" style="background:#007aff">Edit</a> <a href="' + url_for("admin_product_delete", pid=p["id"]) + '" class="btn-sm" style="background:#ff3b30">Del</a></td></tr>'
-    body = '<div style="margin-bottom:16px"><a href="' + url_for("admin_product_new") + '" class="btn-sm" style="padding:12px 20px;background:linear-gradient(135deg,#ff453a,#d70015)">+ New Product</a></div><div class="admin-table"><table><thead><tr><th>Img</th><th>Product</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>' + (rows or '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c7c7cc">No products</td></tr>') + '</tbody></table></div>'
+        st = '<span class="badge b-in">Active</span>' if p["is_active"] else '<span class="badge b-out">Hidden</span>'
+        img = p["image"] or "📦"
+        cat = p["category"] or "Other"
+        rows += '<tr><td style="font-size:24px">' + img + '</td><td><b>' + p["name"] + '</b><br><span style="color:#8e8e93;font-size:12px">' + cat + '</span></td><td><b style="color:#ff3b30">' + format(p["price"], ",.0f") + ' Ks</b></td><td>' + str(p["stock"]) + '</td><td>' + st + '</td><td><a href="' + url_for("admin_product_edit", pid=p["id"]) + '" class="btn-sm" style="background:#007aff">Edit</a> <a href="' + url_for("admin_product_delete", pid=p["id"]) + '" class="btn-sm" style="background:#ff3b30" onclick="return confirm(\'Delete?\')">Del</a></td></tr>'
+    
+    body = stats_html + '<div style="margin-bottom:16px"><a href="' + url_for("admin_product_new") + '" class="btn-sm" style="padding:12px 20px;background:linear-gradient(135deg,#ff453a,#d70015)">+ New Product</a></div><div class="admin-table"><table><thead><tr><th>Img</th><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>' + (rows or '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c7c7cc">No products</td></tr>') + '</tbody></table></div>'
     return admin_page("Products", body)
+
+
 
 @app.route("/admin/product/new", methods=["GET", "POST"])
 @admin_required
@@ -843,7 +856,7 @@ def admin_product_new():
         conn.close()
         flash("Product added", "success")
         return redirect(url_for("admin_products"))
-    body = '<div class="admin-table" style="padding:28px"><h2 style="margin-bottom:20px">New Product</h2><form method="post" style="display:grid;gap:14px;max-width:600px"><label>Name</label><input name="name" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Description</label><textarea name="description" rows="3" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px;font-family:inherit"></textarea><label>Price</label><input name="price" type="number" step="1" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Stock</label><input name="stock" type="number" value="0" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Category</label><input name="category" placeholder="Electronics" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px"><label>Icon</label><input name="image" value="📦" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px"><button type="submit" class="btn" style="margin-top:0">Save</button></form></div>'
+    body = '<div class="admin-table" style="padding:28px"><h2 style="margin-bottom:20px">New Product</h2><form method="post" style="display:grid;gap:14px;max-width:600px"><label>Name</label><input name="name" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Description</label><textarea name="description" rows="3" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px;font-family:inherit"></textarea><label>Price</label><input name="price" type="number" step="1" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Stock</label><input name="stock" type="number" value="0" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px" required><label>Category</label><select name="category" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px;width:100%"><option value="iPhone">📱 iPhone</option><option value="iPad">📱 iPad</option><option value="Mac">💻 Mac</option><option value="Watch">⌚ Apple Watch</option><option value="AirPods">🎧 AirPods</option><option value="Accessories">✏️ Accessories</option><option value="Other">📦 Other</option></select><label>Icon</label><input name="image" value="📦" style="padding:12px;background:#f2f2f7;border:none;border-radius:10px"><button type="submit" class="btn" style="margin-top:0">Save</button></form></div>'
     return admin_page("New Product", body)
 
 @app.route("/admin/product/<int:pid>/edit", methods=["GET", "POST"])
