@@ -12,34 +12,51 @@ def get_db():
     return conn
 
 def init_db():
+    """Robust DB init - deletes broken DB and recreates all tables"""
     import os as _os
-    # Delete broken DB if it exists but has no tables
-    if _os.path.exists(DB):
-        try:
-            _c = sqlite3.connect(DB)
-            tables = _c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            _c.close()
-            if not tables:
-                _os.remove(DB)
-                print("Removed empty DB, recreating...")
-        except Exception as _e:
-            print("DB check error:", _e)
+    try:
+        # Check if DB exists and is valid
+        if _os.path.exists(DB):
             try:
-                _os.remove(DB)
-            except: pass
-    conn = get_db(); c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, pin TEXT NOT NULL, balance REAL DEFAULT 0, is_active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-    c.execute("CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT, amount REAL, balance_after REAL, note TEXT, related_user_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-    c.execute("CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)")
-    c.execute("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL, stock INTEGER, category TEXT, image TEXT, is_active INTEGER DEFAULT 1)")
-    c.execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, status TEXT DEFAULT 'PENDING', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-    c.execute("CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_name TEXT, price REAL, quantity INTEGER, subtotal REAL)")
-    if c.execute("SELECT COUNT(*) FROM admins").fetchone()[0] == 0:
-        c.execute("INSERT INTO admins (username,password) VALUES (?,?)", ("admin", hashlib.sha256(b"admin123").hexdigest()))
-    if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
-        items = [("iPhone 15","Latest iPhone",2500000,10,"Electronics","PHONE"),("AirPods Pro","ANC Wireless",350000,25,"Electronics","EAR"),("Coffee 1kg","Arabica Premium",25000,50,"Food","COFFEE"),("T-Shirt","Cotton M/L/XL",15000,100,"Fashion","SHIRT"),("Headphones","BT 5.0",85000,30,"Electronics","EAR"),("Python Book","Learn Python",18000,40,"Books","BOOK")]
-        for i in items: c.execute("INSERT INTO products (name,description,price,stock,category,image) VALUES (?,?,?,?,?,?)", i)
-    conn.commit(); conn.close()
+                _c = sqlite3.connect(DB)
+                tables = _c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                _c.close()
+                if not tables or len(tables) < 5:
+                    _os.remove(DB)
+                    print("Deleted incomplete DB, recreating...")
+            except Exception as _e:
+                print("DB corrupted, deleting:", _e)
+                try:
+                    _os.remove(DB)
+                except: pass
+
+        # Create all tables
+        conn = get_db(); c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL, pin TEXT NOT NULL, balance REAL DEFAULT 0, is_active INTEGER DEFAULT 1, birthdate TEXT, phone_verified INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        c.execute("CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, type TEXT, amount REAL, balance_after REAL, note TEXT, related_user_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        c.execute("CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)")
+        c.execute("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL, stock INTEGER, category TEXT, image TEXT, is_active INTEGER DEFAULT 1)")
+        c.execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, status TEXT DEFAULT 'PENDING', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        c.execute("CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_name TEXT, price REAL, quantity INTEGER, subtotal REAL)")
+
+        # Default admin
+        if c.execute("SELECT COUNT(*) FROM admins").fetchone()[0] == 0:
+            c.execute("INSERT INTO admins (username,password) VALUES (?,?)", ("admin", hashlib.sha256(b"admin123").hexdigest()))
+            print("Created default admin")
+
+        # Sample products
+        if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
+            samples = [("iPhone 15","Latest iPhone",2500000,10,"Electronics","PHONE"),("AirPods Pro","ANC Wireless",350000,25,"Electronics","EAR"),("Coffee 1kg","Arabica Premium",25000,50,"Food","COFFEE"),("T-Shirt","Cotton M/L/XL",15000,100,"Fashion","SHIRT"),("Headphones","BT 5.0",85000,30,"Electronics","EAR"),("Python Book","Learn Python",18000,40,"Books","BOOK")]
+            for s in samples:
+                c.execute("INSERT INTO products (name,description,price,stock,category,image) VALUES (?,?,?,?,?,?)", s)
+            print("Created sample products")
+
+        conn.commit(); conn.close()
+        print("init_db() complete - DB at:", DB)
+    except Exception as e:
+        print("init_db ERROR:", e)
+        import traceback
+        traceback.print_exc()
 
 def hp(p): return hashlib.sha256(p.encode()).hexdigest()
 
@@ -288,6 +305,13 @@ def pp(body, nav="home"):
     return head + ms + fh() + '<div class="phone"><div class="screen">' + body + '</div>' + nav_html + '</div>' + tail
 
 
+
+
+# Initialize DB at import time (for gunicorn)
+try:
+    init_db()
+except Exception as _e:
+    print("init_db failed at startup:", _e)
 
 @app.route("/")
 def index():
@@ -882,8 +906,6 @@ def mobile_js():
 def frame_fix_js():
     from flask import send_from_directory
     return send_from_directory("static", "frame_fix.js", mimetype="application/javascript")
-
-init_db()
 
 if __name__ == "__main__":
     init_db()
