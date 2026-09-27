@@ -1,18 +1,24 @@
 {
-  "background_color": "#0a0a0a",
-  "dir": "ltr",
-  "display": "standalone",
   "name": "iCare Wallet",
-  "orientation": "portrait",
-  "scope": "/",
   "short_name": "iCare",
-  "start_url": "/wallet",
-  "theme_color": "#ff3b30",
   "description": "Secure Digital Wallet",
+  "start_url": "/wallet",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff3b30",
+  "dir": "ltr",
   "icons": [
-    {"src": "/static/icon-192-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "/static/icon-512-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-    {"src": "/static/icon-192-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
-    {"src": "/static/icon-512-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    {
+      "src": "/static/icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
