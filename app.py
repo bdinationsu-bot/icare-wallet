@@ -490,6 +490,11 @@ def logout():
 def wallet():
     conn = get_db()
     u = conn.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    if u is None:
+        conn.close()
+        session.clear()
+        flash("Account မတွေ့ပါ - ပြန် Register လုပ်ပါ", "error")
+        return redirect(url_for("login"))
     txns = conn.execute("SELECT * FROM transactions WHERE user_id=? ORDER BY id DESC LIMIT 5", (session["user_id"],)).fetchall()
     sent = conn.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE user_id=? AND type='SEND'", (session["user_id"],)).fetchone()[0]
     recv = conn.execute("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE user_id=? AND type IN ('TOPUP','RECEIVE')", (session["user_id"],)).fetchone()[0]
@@ -519,6 +524,10 @@ def topup():
         else:
             conn = get_db()
             u = conn.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+            if u is None:
+                conn.close()
+                session.clear()
+                return redirect(url_for("login"))
             nb = u["balance"] + amt
             conn.execute("UPDATE users SET balance=? WHERE id=?", (nb, u["id"]))
             conn.execute("INSERT INTO transactions (user_id,type,amount,balance_after,note) VALUES (?,?,?,?,?)", (u["id"], "TOPUP", amt, nb, "Top-up"))
@@ -751,6 +760,10 @@ def orders():
 def profile():
     conn = get_db()
     u = conn.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    if u is None:
+        conn.close()
+        session.clear()
+        return redirect(url_for("login"))
     conn.close()
     body = '<div class="appbar"><a href="' + url_for("wallet") + '">&lt;</a><h2>Profile</h2></div><div class="section"><div style="background:#fff;border-radius:20px;padding:24px;text-align:center"><div style="width:80px;height:80px;border-radius:50%;margin:0 auto 14px;background:linear-gradient(135deg,#ff453a,#d70015);color:#fff;font-size:36px;display:flex;align-items:center;justify-content:center;font-weight:700">' + u["name"][0].upper() + '</div><h3 style="font-size:20px;font-weight:700">' + u["name"] + '</h3><p style="font-size:13px;color:#8e8e93;margin-top:4px">' + u["phone"] + '</p><div style="margin-top:20px;padding:16px;background:#f2f2f7;border-radius:14px"><div style="font-size:12px;color:#8e8e93">Balance</div><div style="font-size:28px;font-weight:700;color:#ff3b30;margin-top:6px">' + format(u["balance"], ",.2f") + ' Ks</div></div></div><div style="margin-top:16px;background:#fff;border-radius:20px;overflow:hidden"><a href="' + url_for("orders") + '" style="display:block;padding:18px;text-decoration:none;color:#1c1c1e;border-bottom:.5px solid #e5e5ea;font-weight:600">My Orders</a><a href="' + url_for("history") + '" style="display:block;padding:18px;text-decoration:none;color:#1c1c1e;border-bottom:.5px solid #e5e5ea;font-weight:600">History</a><a href="' + url_for("logout") + '" style="display:block;padding:18px;text-decoration:none;color:#ff3b30;font-weight:600">Logout</a></div></div>'
     return pp(body, "me")
